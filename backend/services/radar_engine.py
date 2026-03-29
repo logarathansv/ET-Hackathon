@@ -480,14 +480,24 @@ class RadarEngine:
                 present_stocks.add(candidate.signal.stock)
                 if len(diverse_signals) >= target_k:
                     break
+        
+        # If still below target, include remaining stocks from STOCK_UNIVERSE
+        if len(diverse_signals) < target_k:
+            remaining_stocks = [s for s in STOCK_UNIVERSE if s not in present_stocks]
+            for stock in sorted(remaining_stocks):  # Consistent ordering
+                # Try to find any signal for this stock from ranked_all
+                stock_signals = [x for x in ranked_all if x.signal.stock == stock]
+                if stock_signals:
+                    best_signal = max(stock_signals, key=lambda x: x.urgency)
+                    diverse_signals.append(best_signal)
+                    present_stocks.add(stock)
+                if len(diverse_signals) >= target_k:
+                    break
 
         diverse_signals.sort(key=lambda x: x.urgency, reverse=True)
         diverse_signals = diverse_signals[:target_k]
 
-        # Step 6: Quality filter - remove very weak low-confidence items.
-        high_quality = [x for x in diverse_signals if not (x.confidence == "Low" and x.urgency < 4.0)]
-        if len(high_quality) >= 2:
-            diverse_signals = high_quality
+        # Signals are already ranked by urgency and limited to target_k, skip redundant quality filter
 
         # Step 7: Build detailed signal items with explanations, insights, and actions
         signal_items: list[SignalItem] = []
@@ -641,11 +651,19 @@ class RadarEngine:
         return TraceResponse(signal=signal.signal_type, logic_flow=signal.reasoning)
 
     async def simulate(self, scenario: str, portfolio: list[str]) -> SimulateResponse:
-        scenario_l = scenario.lower()
+        scenario_l = scenario.lower().replace("_", " ").strip()
 
         rate_sensitive = {"HDFCBANK"}
         export_sensitive = {"INFY", "TCS"}
         cyclical = {"RELIANCE", "TATAMOTORS"}
+
+        is_bear_market = "bear market" in scenario_l
+        is_bull_market = "bull market" in scenario_l
+        is_recession = "recession" in scenario_l
+        is_high_inflation = "high inflation" in scenario_l or "inflation" in scenario_l
+        is_rate_hike = "rate" in scenario_l and "hike" in scenario_l
+        is_rate_cut = "rate" in scenario_l and "cut" in scenario_l
+        is_tech_crash = "tech crash" in scenario_l
 
         impact: list[SimulateImpactItem] = []
         for raw_stock in portfolio:
@@ -654,10 +672,52 @@ class RadarEngine:
             reason = "No strong direct transmission channel identified for this scenario"
             confidence: Literal["Low", "Medium", "High"] = "Low"
 
-            if "rate" in scenario_l and "hike" in scenario_l:
+            if is_bear_market or is_recession:
+                if stock in cyclical:
+                    effect = "Negative"
+                    reason = "Economic slowdown can weaken demand and earnings in cyclical sectors"
+                    confidence = "High"
+                elif stock in rate_sensitive:
+                    effect = "Negative"
+                    reason = "Credit growth and asset quality may weaken in a risk-off cycle"
+                    confidence = "High"
+                elif stock in export_sensitive:
+                    effect = "Negative"
+                    reason = "Global slowdown can delay enterprise spending and IT deal flow"
+                    confidence = "Medium"
+
+            elif is_bull_market:
+                if stock in cyclical:
+                    effect = "Positive"
+                    reason = "Risk-on market phases often boost cyclical earnings and valuations"
+                    confidence = "High"
+                elif stock in rate_sensitive:
+                    effect = "Positive"
+                    reason = "Improved economic activity can support loan growth and profitability"
+                    confidence = "Medium"
+                elif stock in export_sensitive:
+                    effect = "Positive"
+                    reason = "Growth optimism can improve discretionary tech spending visibility"
+                    confidence = "Medium"
+
+            elif is_high_inflation:
+                if stock in cyclical:
+                    effect = "Negative"
+                    reason = "Input-cost pressure can compress margins in inflationary environments"
+                    confidence = "High"
+                elif stock in rate_sensitive:
+                    effect = "Neutral"
+                    reason = "Banks can partly pass through rates, offsetting some inflation drag"
+                    confidence = "Medium"
+                elif stock in export_sensitive:
+                    effect = "Neutral"
+                    reason = "IT demand is less directly linked to domestic inflation shocks"
+                    confidence = "Medium"
+
+            elif is_rate_hike:
                 if stock in rate_sensitive:
                     effect = "Negative"
-                    reason = "Rate hike can pressure loan growth and funding spreads for banks"
+                    reason = "Rate hikes can pressure credit demand and funding dynamics for banks"
                     confidence = "High"
                 elif stock in export_sensitive:
                     effect = "Neutral"
@@ -667,25 +727,30 @@ class RadarEngine:
                     effect = "Negative"
                     reason = "Higher rates can reduce demand in cyclical sectors"
                     confidence = "Medium"
-            elif "rate" in scenario_l and "cut" in scenario_l:
+
+            elif is_rate_cut:
                 if stock in rate_sensitive or stock in cyclical:
                     effect = "Positive"
-                    reason = "Rate cuts can improve credit demand and support cyclicals"
-                    confidence = "High"
-            elif "oil" in scenario_l and ("rise" in scenario_l or "spike" in scenario_l):
-                if stock in cyclical:
-                    effect = "Negative"
-                    reason = "Higher oil prices can compress margins and slow demand"
+                    reason = "Rate cuts can improve credit demand and support cyclical recovery"
                     confidence = "High"
                 elif stock in export_sensitive:
-                    effect = "Neutral"
-                    reason = "Oil shock is second-order for IT exporters"
-                    confidence = "Medium"
-            elif "it spending" in scenario_l and ("increase" in scenario_l or "recovery" in scenario_l):
-                if stock in export_sensitive:
                     effect = "Positive"
-                    reason = "Improved global IT budgets can lift deal flow and revenue visibility"
+                    reason = "Lower rates can improve risk appetite and support technology spending"
+                    confidence = "Medium"
+
+            elif is_tech_crash:
+                if stock in export_sensitive:
+                    effect = "Negative"
+                    reason = "Tech sentiment shocks can reduce valuation multiples and deal confidence"
                     confidence = "High"
+                elif stock in cyclical:
+                    effect = "Neutral"
+                    reason = "Tech-specific selloffs have weaker first-order impact on cyclicals"
+                    confidence = "Medium"
+                elif stock in rate_sensitive:
+                    effect = "Neutral"
+                    reason = "Banks are indirectly affected via risk sentiment rather than direct tech demand"
+                    confidence = "Medium"
 
             impact.append(
                 SimulateImpactItem(

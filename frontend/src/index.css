@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom gradient backgrounds */
+@layer utilities {
+  .gradient-primary {
+    @apply bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900;
+  }
+
+  .gradient-accent {
+    @apply bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-purple-500/10;
+  }
+
+  .glass-effect {
+    @apply backdrop-blur-md bg-white/10 border border-white/20;
+  }
+
+  /* Custom animations */
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Smooth transitions */
+button, a, input, select, textarea {
+  @apply transition-colors duration-200;
+}

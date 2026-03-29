@@ -16,6 +16,17 @@ The AI Investor Copilot MCP server enables LLM agents to:
 
 ---
 
+## 📖 API Documentation
+
+📌 **Complete API Reference**: See [API_REFERENCE.md](./API_REFERENCE.md) for:
+- Exact input/output schemas for all 6 tools
+- cURL examples for each endpoint
+- React/TypeScript integration examples
+- Response codes and error handling
+- Rate limits and caching strategy
+
+---
+
 ## 🎯 Core Features
 
 ### 1️⃣ **get_stock_price** - Real-time Stock Data

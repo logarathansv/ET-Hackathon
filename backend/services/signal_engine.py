@@ -113,4 +113,21 @@ class SignalEngine:
                 )
             )
 
+        # Fallback: ensure every stock generates at least one signal for radar visibility
+        if not signals:
+            signals.append(
+                SignalCandidate(
+                    stock=stock,
+                    signal_type="Monitor Signal",
+                    reasoning=[
+                        f"No immediate high-conviction signals detected",
+                        f"Current price action and sentiment appear neutral to mixed",
+                        f"Position monitoring recommended for future pattern development",
+                    ],
+                    sentiment_score=0.0,
+                    price_impact=abs(snapshot.change_pct) if snapshot else 0.0,
+                    technical_alignment=0.5,
+                )
+            )
+
         return signals
